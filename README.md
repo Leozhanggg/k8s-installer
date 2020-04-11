@@ -1,5 +1,4 @@
 # k8s-installer
-k8s-online-installer
 目录
 前置条件：	2
 一、系统初始化	3
@@ -213,7 +212,7 @@ kubectl edit svc/grafana -n monitoring
 
 3)	部署应用管理Helm
 # 执行部署脚本即可
-cd helm-2.16.3 && sh deploy.sh
+cd helm-2.16.3 && sh install.sh
  
 
 4)	部署日志系统EFK
