@@ -10,13 +10,12 @@ bootstrapTokens:
 kind: InitConfiguration
 localAPIEndpoint:
   # 主节点IP地址
-  advertiseAddress: 10.88.77.32
+  advertiseAddress: 192.168.17.128
   bindPort: 6443
 nodeRegistration:
   criSocket: /var/run/dockershim.sock
   # 主节点主机名
-  name: k8s-32
-  # 主节点默认污点
+  name: k8s-128
   taints:
   - effect: NoSchedule
     key: node-role.kubernetes.io/master
@@ -28,7 +27,7 @@ apiVersion: kubeadm.k8s.io/v1beta2
 certificatesDir: /etc/kubernetes/pki
 clusterName: kubernetes
 # 高可用VIP地址
-#controlPlaneEndpoint: "10.88.77.30:6444"
+# controlPlaneEndpoint: "192.168.17.100:6444"
 controllerManager: {}
 dns:
   type: CoreDNS

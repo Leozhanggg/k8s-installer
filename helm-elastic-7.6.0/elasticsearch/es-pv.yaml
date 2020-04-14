@@ -10,4 +10,4 @@ spec:
   persistentVolumeReclaimPolicy: Retain
   nfs:
     path: /nfsdata/elasticsearch
-    server: 10.88.77.32
+    server: 192.168.17.128
