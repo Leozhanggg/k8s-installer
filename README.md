@@ -1,6 +1,4 @@
-# k8s-installer
 目录
-前置条件：	2
 一、系统初始化	3
 1)	设置主机名以及域名解析	3
 2)	设置系统yum镜像源	3
@@ -21,12 +19,19 @@
 2)	部署监控平台Prometheus	8
 3)	部署应用管理Helm	9
 4)	部署日志系统EFK	9
-四、其他	10
-1)	命令自动补全	10
-2)	部署镜像仓库	10
-3)	高可用集群部署	10
+四、部署高可用集群	10
+1)	系统初始化	10
+2)	安装docker和kubernetes	10
+3)	部署haproxy和keepalived	10
+4)	初始化管理节点	10
+5)	加入其余管理节点和工作节点	11
+6)	部署网络，检查集群健康状况	11
+五、其他	12
+1)	命令自动补全	12
+2)	部署镜像仓库	12
+3)	集群状态查看	12
 
- 
+
 前置条件：
 	一台或多台机器
 	操作系统：CentOS7.x-86_x64
@@ -37,25 +42,23 @@
 	节点之中不可以有重复的主机名、MAC 地址、Product_uuid
 	禁止交换分区
 
-
- 
 Kubernetes架构图
- 
+
 一、系统初始化 
 1)	设置主机名以及域名解析
-hostnamectl set-hostname k8s-101 
+hostnamectl set-hostname k8s-128 
 cat >> /etc/hosts <<EOF
-192.168.17.101 k8s-101
-192.168.17.102 k8s-102
-192.168.17.103 k8s-103
-192.168.17.100 myregistry.com
+192.168.17.128 k8s-128
+192.168.17.129 k8s-129
+192.168.17.130 k8s-130
+192.168.17.200 myregistry.com
 EOF
 2)	设置系统yum镜像源
 wget -O /etc/yum.repos.d/CentOS-Base.repo http://mirrors.aliyun.com/repo/Centos-7.repo
 yum clean all && yum makecache
 
 3)	安装依赖包以及常用软件
-yum -y install vim curl wget ntpdate net-tools ipvsadm ipset sysstat conntrack libseccomp
+yum -y install vim curl wget unzip ntpdate net-tools ipvsadm ipset sysstat conntrack libseccomp
 ntpdate ntp1.aliyun.com
 
 4)	安装nfs服务以及设置启动
@@ -71,7 +74,7 @@ systemctl stop firewalld && systemctl disable firewalld
 
 6)	调整系统内核参数
 cat > /etc/sysctl.d/kubernetes.conf <<EOF
-# 开启网桥模式,关闭ipv6协议
+# 开启网桥模式,关闭ipv6协议（必要）
 net.bridge.bridge-nf-call-iptables=1
 net.bridge.bridge-nf-call-ip6tables=1
 net.ipv6.conf.all.disable_ipv6=1
@@ -80,12 +83,12 @@ net.ipv4.ip_forward=1
 net.ipv4.tcp_tw_recycle=0
 # 禁止使用Swap空间,只有当系统OOM时才允许使用它
 vm.swappiness=0
-# 设置文件句柄数目,打开数目
+# 设置文件句柄数目,打开数目(可选)
 fs.file-max=2000000
 fs.nr_open=2000000
 fs.inotify.max_user_instances=512
 fs.inotify.max_user_watches=1280000
-# 设置系统最大连接数
+# 设置系统最大连接数(可选)
 net.netfilter.nf_conntrack_max=524288
 EOF
 
@@ -107,16 +110,12 @@ sh /etc/sysconfig/modules/ipvs.modules && lsmod | grep -e ip_
 
 二、部署k8s集群
 1)	安装部署docker
-# 安装docker组件
+# 设置镜像源，安装docker及组件
 yum install -y yum-utils device-mapper-persistent-data lvm2
-
-# 设置docker镜像源
 yum-config-manager --add-repo http://mirrors.aliyun.com/docker-ce/linux/centos/docker-ce.repo
-
-# 安装docker-ce，这里我们选择19.03.5版本
 yum install -y docker-ce-19.03.5 docker-ce-cli-19.03.5
 
-# 配置daemon.json，包括镜像加速，仓库地址，日志设置
+# 设置镜像加速，仓库地址，日志模式
 mkdir /etc/docker
 cat > /etc/docker/daemon.json <<EOF
 {
@@ -145,7 +144,7 @@ gpgkey=http://mirrors.aliyun.com/kubernetes/yum/doc/yum-key.gpg
 http://mirrors.aliyun.com/kubernetes/yum/doc/rpm-package-key.gpg
 EOF
 
-# 安装k8s组件，这里我们选择1.17.4版本
+# 安装kubeadm、kubectl、kebelet 
 yum -y install kubeadm-1.17.4 kubectl-1.17.4 kubelet-1.17.4 
 systemctl enable kubelet.service
 
@@ -162,7 +161,7 @@ sudo chown $(id -u):$(id -g) $HOME/.kube/config
 
 4)	加入工作节点
 # 根据初始化日志提示，执行kubeadm join命令加入集群
-kubeadm join 192.168.17.137:6443 --token abcdef.0123456789abcdef \
+kubeadm join 192.168.17.128:6443 --token abcdef.0123456789abcdef \
 	--discovery-token-ca-cert-hash sha256:260796226d…………
 
 5)	部署网络插件flannel
@@ -192,8 +191,8 @@ kubectl -n kube-system describe secret $(kubectl -n kube-system get secret | gre
 更多详情：Kubernetes实战总结 - dashboard部署（v2.0.0-rc6）
 
 2)	部署监控平台Prometheus
-# 执行准备好的yaml部署文件
-cd kube-prometheus-0.3.0
+# 先部署setup文件，然后部署其余文件
+cd kube-prometheus-0.3.0/manifests
 kubectl create -f kube-prometheus/setup
 until kubectl get servicemonitors --all-namespaces ; do date; sleep 1; echo ""; done
 kubectl create -f .
@@ -212,16 +211,17 @@ kubectl edit svc/grafana -n monitoring
 
 3)	部署应用管理Helm
 # 执行部署脚本即可
-cd helm-2.16.3 && sh install.sh
+cd helm-3.1.1 && sh install.sh
  
 
 4)	部署日志系统EFK
-# 先部署pv，然后依次部署efk
+# 修改es-pv.yaml存储地址，然后依次部署efk
 cd helm-elastic-7.6.0
-kubectl create –f elasticsearch/els-pv.yaml
-helm install -n elasticsearch --namespace=logs ./elasticsearch
-helm install -n filebeat --namespace=logs ./filebeat
-helm install -n kibana --namespace=logs ./kibana
+ 
+kubectl create -f elasticsearch/es-pv.yaml
+helm install es --namespace=efk ./elasticsearch
+helm install fb --namespace=efk ./filebeat
+helm install kb --namespace=efk ./kibana
 
 # 更改ClusterIP => NodePort, 
 kubectl edit svc/kibana-kibana -n logs
@@ -229,7 +229,48 @@ kubectl edit svc/kibana-kibana -n logs
 # 访问masterip:port，即可查看日志
  
  
-四、其他
+四、部署高可用集群
+1)	系统初始化
+参考第一部分。
+2)	安装docker和kubernetes
+参考第二部步骤【1】和【2】。
+3)	部署haproxy和keepalived
+修改kube-ha文件夹中start.sh和haproxy.cfg
+   
+复制文件夹kube-ha到其余管理节点，然后执行start.sh即可。
+
+4)	初始化管理节点
+# 修改准备好的kubeadm配置文件(启动高可用VIP配置)，然后初始化集群
+vim kubeadm-config.yaml
+ 
+kubeadm init --config=kubeadm-config.yaml --upload-certs | tee kubeadm-init.log
+
+# 初始化成功后，根据日志提示执行以下命令
+mkdir -p $HOME/.kube
+sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+sudo chown $(id -u):$(id -g) $HOME/.kube/config
+
+5)	加入其余管理节点和工作节点
+# 根据初始化日志提示，执行kubeadm join命令加入集群。
+kubeadm join 192.168.17.100:6444 --token abcdef.0123456789abcdef \
+   --discovery-token-ca-cert-hash sha256:56d53268517... \
+   --experimental-control-plane --certificate-key c4d1525b6cce4....
+
+# 根据初始化日志提示，执行kubeadm join命令加入集群。
+kubeadm join 192.168.17.100:6444 --token abcdef.0123456789abcdef \
+	--discovery-token-ca-cert-hash sha256:260796226d…………
+
+# 如果想去除主节点污点可以执行
+kubectl taint nodes --all node-role.kubernetes.io/master:NoSchedule-
+
+6)	部署网络，检查集群健康状况
+# 执行准备好的yaml部署文件
+kubectl apply -f kube-flannel.yaml
+kubectl get cs && kubectl get nodes && kubectl get pod --all-namespaces
+ 
+
+ 
+五、其他
 1)	命令自动补全
 yum install -y bash-completion
 source /usr/share/bash-completion/bash_completion
@@ -240,5 +281,17 @@ echo "source <(kubectl completion bash)" >> ~/.bashrc
 官方镜像仓库搭建参考：Docker私有仓库搭建与界面化管理
 第三方镜像仓库搭建参考：最新版Harbor搭建（harbor-offline-installer-v1.10.1.tgz）
 
-3)	高可用集群部署
-……
+3)	集群状态查看 
+# 查看etcd健康状态
+kubectl -n kube-system exec etcd-k8s-141 -- etcdctl \
+--endpoints=https://192.168.17.141:2379 \
+--cacert=/etc/kubernetes/pki/etcd/ca.crt \
+--cert=/etc/kubernetes/pki/etcd/server.crt \
+--key=/etc/kubernetes/pki/etcd/server.key endpoint health
+
+# 查看ipvs列表
+ipvsadm -ln
+
+# 查看VIP漂移
+ip a |grep ens33
+
