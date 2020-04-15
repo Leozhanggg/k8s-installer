@@ -1,3 +1,5 @@
+详情参考博客：https://www.cnblogs.com/leozhanggg/category/1680404.html
+
 目录
 一、系统初始化	3
 1)	设置主机名以及域名解析	3
