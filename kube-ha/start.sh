@@ -45,4 +45,4 @@ docker run -dit --restart=always --name=keepalived-k8s \
     -e RID=$RID \
     -e VRID=$VRID \
     -e MCAST_GROUP=$MCAST_GROUP \
-    wise2c/keepalived-k8s:latest
+    wise2c/keepalived-k8s
