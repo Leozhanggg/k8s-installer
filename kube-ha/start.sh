@@ -1,16 +1,19 @@
 #!/bin/bash
 
 # 三台主节点IP地址（修改）
-MasterIP1=192.168.17.128
-MasterIP2=192.168.17.129
-MasterIP3=192.168.17.130
+MasterIP1=10.88.88.147
+MasterIP2=10.88.88.117
+MasterIP3=10.88.88.116
 # Kube-apiserver默认端口
 MasterPort=6443
 
+# Haproxy统计页面端口
+STATS_PORT=6445
+
 # 虚拟网卡IP地址（修改）
-VIRTUAL_IP=192.168.17.100
+VIRTUAL_IP=10.88.88.100
 # 虚拟网卡设备名（修改）
-INTERFACE=ens33
+INTERFACE=ens160
 # 虚拟网卡子网掩码
 NETMASK_BIT=24
 # HAProxy服务端口
@@ -27,6 +30,7 @@ echo "docker run haproxy-k8s..."
 cp haproxy.cfg /etc/kubernetes/
 docker run -dit --restart=always --name haproxy-k8s \
     -p $CHECK_PORT:$CHECK_PORT \
+    -p $STATS_PORT:$STATS_PORT \
     -e MasterIP1=$MasterIP1 \
     -e MasterIP2=$MasterIP2 \
     -e MasterIP3=$MasterIP3 \
