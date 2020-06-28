@@ -1,6 +1,6 @@
 registry:
   # Docker registry url
-  url: http://myregistry.com:5000/v2
+  url: http://hub.jhmy.com:5000/v2
   # Docker registry fqdn
   name: localhost:5000
   # To allow image delete, should be false

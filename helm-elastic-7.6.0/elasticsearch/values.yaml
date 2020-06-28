@@ -13,8 +13,8 @@ roles:
   ingest: "true"
   data: "true"
 
-replicas: 1
-minimumMasterNodes: 1
+replicas: 3
+minimumMasterNodes: 2
 
 esMajorVersion: ""
 
@@ -82,7 +82,7 @@ sidecarResources: {}
 networkHost: "0.0.0.0"
 
 volumeClaimTemplate:
-  accessModes: [ "ReadWriteMany" ]
+  accessModes: [ "ReadWriteOnce" ]
   resources:
     requests:
       storage: 30Gi

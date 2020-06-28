@@ -1,3 +1,4 @@
+# kubeadm config print init-defaults > kubeadm-config.yaml
 apiVersion: kubeadm.k8s.io/v1beta2
 bootstrapTokens:
 - groups:
@@ -38,7 +39,7 @@ etcd:
 imageRepository: registry.aliyuncs.com/google_containers
 kind: ClusterConfiguration
 # k8s版本
-kubernetesVersion: v1.17.4
+kubernetesVersion: v1.17.5
 networking:
   dnsDomain: cluster.local
   # Pod网段（必须与网络插件一致，且不冲突）
@@ -52,3 +53,6 @@ kind: KubeProxyConfiguration
 featureGates:
   SupportIPVSProxyMode: true
 mode: ipvs
+
+# 初始化主节点
+# kubeadm init --config=kubeadm-config.yaml --upload-certs | tee kubeadm-init.log

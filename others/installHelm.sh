@@ -11,7 +11,7 @@ tar -zxvf helm-v3.1.1-linux-amd64.tar.gz
 echo
 
 echo "Intall helm to ${helm_path}"
-\cp linux-amd64/helm ${helm_path}
+\cp helm ${helm_path}
 chmod a+x ${helm_path}/helm
 
 helm version
