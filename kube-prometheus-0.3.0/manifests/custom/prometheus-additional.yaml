@@ -1,0 +1,116 @@
+- job_name: 'node_export_others'
+  static_configs:
+    - targets:
+      - 10.88.88.118:9591
+      - 10.88.88.137:9591
+      - 10.88.88.138:9591
+      - 10.88.88.139:9591
+      - 10.88.88.153:9591
+      - 10.88.88.154:9591
+      - 10.88.88.156:9591
+      - 10.88.88.159:9591
+      - 10.88.88.166:9591
+      - 10.88.88.167:9591
+      - 10.88.88.168:9591
+      - 10.88.88.169:9591
+      - 10.88.88.175:9591
+      - 10.88.88.177:9591
+      - 10.88.88.179:9591
+      - 10.88.88.180:9591
+      - 10.88.88.181:9591
+
+- job_name: 'nginx'
+  static_configs:
+    - targets:
+      - 10.88.88.159:9593
+
+- job_name: 'mysql'
+  static_configs:
+    - targets:
+      - 10.88.88.156:9592
+
+- job_name: 'pushgateway-flink'
+  static_configs:
+    - targets:
+      - 10.88.88.137:9091
+
+- job_name: 'kafka_jmx_export'
+  static_configs:
+    - targets:
+      - 10.88.88.118:9991
+      - 10.88.88.138:9991
+      - 10.88.88.139:9991
+
+- job_name: 'zookeeper_cdh_export'
+  static_configs:
+    - targets:
+      - 10.88.88.118:9595
+      - 10.88.88.138:9595
+      - 10.88.88.139:9595
+
+- job_name: 'hdfs_namenode_cdh'
+  static_configs:
+    - targets:
+      - 10.88.88.137:9600
+      - 10.88.88.139:9600
+
+- job_name: 'hdfs_datanode_cdh'
+  static_configs:
+    - targets:
+      - 10.88.88.118:9601
+      - 10.88.88.138:9601
+      - 10.88.88.139:9601
+
+- job_name: 'yarn_resourcemanager_cdh'
+  static_configs:
+    - targets:
+      - 10.88.88.137:9602
+      - 10.88.88.139:9602
+
+- job_name: 'yarn_nodemanager_cdh'
+  static_configs:
+    - targets:
+      - 10.88.88.118:9603
+      - 10.88.88.138:9603
+      - 10.88.88.139:9603
+
+- job_name: 'redis_exporter'
+  static_configs:
+    - targets:
+      - 10.88.88.166:9594
+
+- job_name: 'elasticsearch'
+  metrics_path: "/_prometheus/metrics"
+  static_configs:
+  - targets:
+    - 10.88.88.169:8970
+    - 10.88.88.175:8970
+    - 10.88.88.177:8970
+    
+- job_name: 'nacos'
+  metrics_path: '/nacos/actuator/prometheus'
+  static_configs:
+    - targets:
+      - 10.88.88.166:8848
+      - 10.88.88.167:8848
+      - 10.88.88.168:8848
+      
+- job_name: 'redis_exporter_targets'
+  static_configs:
+    - targets:
+      - redis://10.88.88.179:6179
+      - redis://10.88.88.180:6179
+      - redis://10.88.88.181:6179
+      - redis://10.88.88.179:6178
+      - redis://10.88.88.180:6178
+      - redis://10.88.88.181:6178
+      - redis://10.88.88.179:6177
+      - redis://10.88.88.179:6176
+  metrics_path: /scrape
+  relabel_configs:
+    - source_labels: [__address__]
+      target_label: __param_target
+    - source_labels: [__param_target]
+      target_label: instance
+    - target_label: __address__
+      replacement: 10.88.88.166:9594

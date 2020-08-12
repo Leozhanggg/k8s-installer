@@ -4,9 +4,14 @@ metadata:
   name: dashboard
   namespace: kubernetes-dashboard
   annotations:
-    nginx.ingress.kubernetes.io/ssl-passthrough: "true"
-    nginx.org/ssl-services: kubernetes-dashboard
+    nginx.org/redirect-to-https: "true"
+    ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.org/ssl-services: "kubernetes-dashboard"
 spec:
+  tls:
+  - hosts: 
+    - k8s.dashboard.com
+    secretName: tls-secret
   rules:
   - host: k8s.dashboard.com
     http:
@@ -15,3 +20,4 @@ spec:
         backend:
           serviceName: kubernetes-dashboard
           servicePort: 443
+

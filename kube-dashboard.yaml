@@ -1,9 +1,22 @@
+# Copyright 2017 The Kubernetes Authors.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
 # You can get more information at:
 # https://www.cnblogs.com/leozhanggg/p/12560323.html
 #
 # View the token login with the following command:
-# kubectl -n kube-system describe secret \
-# $(kubectl -n kube-system get secret | grep dashboard-admin | awk '{print $1}')
+# kubectl -n kube-system describe secret $(kubectl -n kube-system get secret | grep dashboard-admin | awk '{print $1}')
 
 apiVersion: v1
 kind: ServiceAccount
@@ -13,7 +26,7 @@ metadata:
   
 ---
 
-apiVersion: rbac.authorization.k8s.io/v1beta1
+apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
   name: dashboard-admin
@@ -53,11 +66,9 @@ metadata:
   name: kubernetes-dashboard
   namespace: kubernetes-dashboard
 spec:
-  type: NodePort
   ports:
     - port: 443
       targetPort: 8443
-      nodePort: 30001
   selector:
     k8s-app: kubernetes-dashboard
 
@@ -205,8 +216,8 @@ spec:
     spec:
       containers:
         - name: kubernetes-dashboard
-          image: registry.cn-shanghai.aliyuncs.com/leozhanggg/kubernetesui/dashboard:v2.0.0-rc6
-          # imagePullPolicy: Always
+          image: kubernetesui/dashboard:v2.0.0-rc7
+          imagePullPolicy: Always
           ports:
             - containerPort: 8443
               protocol: TCP
@@ -289,7 +300,7 @@ spec:
     spec:
       containers:
         - name: dashboard-metrics-scraper
-          image: registry.cn-shanghai.aliyuncs.com/leozhanggg/kubernetesui/metrics-scraper:v1.0.3
+          image: kubernetesui/metrics-scraper:v1.0.4
           ports:
             - containerPort: 8000
               protocol: TCP

@@ -1,0 +1,65 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  labels:
+    prometheus: k8s
+    role: alert-rules
+  name: prometheus-additional-rules
+  namespace: monitoring
+spec:
+  groups:
+    - name: general.rules
+      rules:
+      - alert: InstanceDown
+        expr: up == 0
+        for: 5s
+        labels:
+          severity: critical 
+        annotations:
+          platform: "育苗通测试平台"
+          summary: "监控采集器 {{ $labels.instance }} 停止工作!!!"
+          value: "{{ $value }}"
+          
+    - name: node.rules
+      rules:
+      - alert: NodeFilesystemUsage
+        expr: 100 - (node_filesystem_free_bytes{device="rootfs"} / node_filesystem_size_bytes{device="rootfs"} * 100) > 85 
+        for: 5m
+        labels:
+          severity: warning 
+        annotations:
+          platform: "育苗通测试平台"
+          summary: "主机 {{ $labels.instance }} : {{ $labels.mountpoint }} 分区使用率超过80%!!!"
+          value: "{{ $value }}"
+
+      - alert: NodeMemoryUsage
+        expr: 100 - (node_memory_MemFree_bytes+node_memory_Cached_bytes+node_memory_Buffers_bytes) / node_memory_MemTotal_bytes * 100 > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          platform: "育苗通测试平台"
+          summary: "主机 {{ $labels.instance }} 内存使用率超过80%!!!"
+          value: "{{ $value }}"
+
+      - alert: NodeCPUUsage    
+        expr: 100 - (avg(irate(node_cpu_seconds_total{mode="idle"}[5m])) by (instance) * 100) > 80 
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          platform: "育苗通测试平台"
+          summary: "主机 {{ $labels.instance }} CPU使用率超过80%!!!"
+          value: "{{ $value }}"
+
+    # - name: pod.rules
+      # rules:
+      # - alert: PodRestart
+        # expr: sum (changes (kube_pod_container_status_restarts_total[1m])) by (pod,namespace) > 0
+        # for: 1s
+        # labels:
+          # severity: warning 
+        # annotations:
+          # platform: "育苗通测试平台"
+          # summary: "容器ns: {{ $labels.namespace }} | pod: {{ $labels.pod }} 发生了重启!!!"
+          # value: "{{ $value }}"

@@ -1,0 +1,21 @@
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: docker-registry
+  namespace: docker-registry
+spec:
+  rules:
+  - host: k8s.registry-web.com
+    http:
+      paths:
+      - path: /
+        backend:
+          serviceName: registry-web
+          servicePort: 8080
+  - host: k8s.registry-srv.com
+    http:
+      paths:
+      - path: /
+        backend:
+          serviceName: registry-srv
+          servicePort: 5000

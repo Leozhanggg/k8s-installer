@@ -1,0 +1,1207 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  labels:
+    prometheus: k8s
+    role: alert-rules
+  name: prometheus-k8s-rules
+  namespace: monitoring
+spec:
+  groups:
+  - name: node-exporter.rules
+    rules:
+    - expr: |
+        count without (cpu) (
+          count without (mode) (
+            node_cpu_seconds_total{job="node-exporter"}
+          )
+        )
+      record: instance:node_num_cpu:sum
+    - expr: |
+        1 - avg without (cpu, mode) (
+          rate(node_cpu_seconds_total{job="node-exporter", mode="idle"}[1m])
+        )
+      record: instance:node_cpu_utilisation:rate1m
+    - expr: |
+        (
+          node_load1{job="node-exporter"}
+        /
+          instance:node_num_cpu:sum{job="node-exporter"}
+        )
+      record: instance:node_load1_per_cpu:ratio
+    - expr: |
+        1 - (
+          node_memory_MemAvailable_bytes{job="node-exporter"}
+        /
+          node_memory_MemTotal_bytes{job="node-exporter"}
+        )
+      record: instance:node_memory_utilisation:ratio
+    - expr: |
+        rate(node_vmstat_pgmajfault{job="node-exporter"}[1m])
+      record: instance:node_vmstat_pgmajfault:rate1m
+    - expr: |
+        rate(node_disk_io_time_seconds_total{job="node-exporter", device=~"nvme.+|rbd.+|sd.+|vd.+|xvd.+|dm-.+"}[1m])
+      record: instance_device:node_disk_io_time_seconds:rate1m
+    - expr: |
+        rate(node_disk_io_time_weighted_seconds_total{job="node-exporter", device=~"nvme.+|rbd.+|sd.+|vd.+|xvd.+|dm-.+"}[1m])
+      record: instance_device:node_disk_io_time_weighted_seconds:rate1m
+    - expr: |
+        sum without (device) (
+          rate(node_network_receive_bytes_total{job="node-exporter", device!="lo"}[1m])
+        )
+      record: instance:node_network_receive_bytes_excluding_lo:rate1m
+    - expr: |
+        sum without (device) (
+          rate(node_network_transmit_bytes_total{job="node-exporter", device!="lo"}[1m])
+        )
+      record: instance:node_network_transmit_bytes_excluding_lo:rate1m
+    - expr: |
+        sum without (device) (
+          rate(node_network_receive_drop_total{job="node-exporter", device!="lo"}[1m])
+        )
+      record: instance:node_network_receive_drop_excluding_lo:rate1m
+    - expr: |
+        sum without (device) (
+          rate(node_network_transmit_drop_total{job="node-exporter", device!="lo"}[1m])
+        )
+      record: instance:node_network_transmit_drop_excluding_lo:rate1m
+  - name: kube-apiserver.rules
+    rules:
+    - expr: |
+        histogram_quantile(0.99, sum(rate(apiserver_request_duration_seconds_bucket{job="apiserver"}[5m])) without(instance, pod))
+      labels:
+        quantile: "0.99"
+      record: cluster_quantile:apiserver_request_duration_seconds:histogram_quantile
+    - expr: |
+        histogram_quantile(0.9, sum(rate(apiserver_request_duration_seconds_bucket{job="apiserver"}[5m])) without(instance, pod))
+      labels:
+        quantile: "0.9"
+      record: cluster_quantile:apiserver_request_duration_seconds:histogram_quantile
+    - expr: |
+        histogram_quantile(0.5, sum(rate(apiserver_request_duration_seconds_bucket{job="apiserver"}[5m])) without(instance, pod))
+      labels:
+        quantile: "0.5"
+      record: cluster_quantile:apiserver_request_duration_seconds:histogram_quantile
+  - name: k8s.rules
+    rules:
+    - expr: |
+        sum(rate(container_cpu_usage_seconds_total{job="kubelet", image!="", container!="POD"}[5m])) by (namespace)
+      record: namespace:container_cpu_usage_seconds_total:sum_rate
+    - expr: |
+        sum by (namespace, pod, container) (
+          rate(container_cpu_usage_seconds_total{job="kubelet", image!="", container!="POD"}[5m])
+        ) * on (namespace, pod) group_left(node) max by(namespace, pod, node) (kube_pod_info)
+      record: node_namespace_pod_container:container_cpu_usage_seconds_total:sum_rate
+    - expr: |
+        container_memory_working_set_bytes{job="kubelet", image!=""}
+        * on (namespace, pod) group_left(node) max by(namespace, pod, node) (kube_pod_info)
+      record: node_namespace_pod_container:container_memory_working_set_bytes
+    - expr: |
+        container_memory_rss{job="kubelet", image!=""}
+        * on (namespace, pod) group_left(node) max by(namespace, pod, node) (kube_pod_info)
+      record: node_namespace_pod_container:container_memory_rss
+    - expr: |
+        container_memory_cache{job="kubelet", image!=""}
+        * on (namespace, pod) group_left(node) max by(namespace, pod, node) (kube_pod_info)
+      record: node_namespace_pod_container:container_memory_cache
+    - expr: |
+        container_memory_swap{job="kubelet", image!=""}
+        * on (namespace, pod) group_left(node) max by(namespace, pod, node) (kube_pod_info)
+      record: node_namespace_pod_container:container_memory_swap
+    - expr: |
+        sum(container_memory_usage_bytes{job="kubelet", image!="", container!="POD"}) by (namespace)
+      record: namespace:container_memory_usage_bytes:sum
+    - expr: |
+        sum by (namespace, label_name) (
+            sum(kube_pod_container_resource_requests_memory_bytes{job="kube-state-metrics"} * on (endpoint, instance, job, namespace, pod, service) group_left(phase) (kube_pod_status_phase{phase=~"Pending|Running"} == 1)) by (namespace, pod)
+          * on (namespace, pod)
+            group_left(label_name) kube_pod_labels{job="kube-state-metrics"}
+        )
+      record: namespace:kube_pod_container_resource_requests_memory_bytes:sum
+    - expr: |
+        sum by (namespace, label_name) (
+            sum(kube_pod_container_resource_requests_cpu_cores{job="kube-state-metrics"} * on (endpoint, instance, job, namespace, pod, service) group_left(phase) (kube_pod_status_phase{phase=~"Pending|Running"} == 1)) by (namespace, pod)
+          * on (namespace, pod)
+            group_left(label_name) kube_pod_labels{job="kube-state-metrics"}
+        )
+      record: namespace:kube_pod_container_resource_requests_cpu_cores:sum
+    - expr: |
+        sum(
+          label_replace(
+            label_replace(
+              kube_pod_owner{job="kube-state-metrics", owner_kind="ReplicaSet"},
+              "replicaset", "$1", "owner_name", "(.*)"
+            ) * on(replicaset, namespace) group_left(owner_name) kube_replicaset_owner{job="kube-state-metrics"},
+            "workload", "$1", "owner_name", "(.*)"
+          )
+        ) by (namespace, workload, pod)
+      labels:
+        workload_type: deployment
+      record: mixin_pod_workload
+    - expr: |
+        sum(
+          label_replace(
+            kube_pod_owner{job="kube-state-metrics", owner_kind="DaemonSet"},
+            "workload", "$1", "owner_name", "(.*)"
+          )
+        ) by (namespace, workload, pod)
+      labels:
+        workload_type: daemonset
+      record: mixin_pod_workload
+    - expr: |
+        sum(
+          label_replace(
+            kube_pod_owner{job="kube-state-metrics", owner_kind="StatefulSet"},
+            "workload", "$1", "owner_name", "(.*)"
+          )
+        ) by (namespace, workload, pod)
+      labels:
+        workload_type: statefulset
+      record: mixin_pod_workload
+  - name: kube-scheduler.rules
+    rules:
+    - expr: |
+        histogram_quantile(0.99, sum(rate(scheduler_e2e_scheduling_duration_seconds_bucket{job="kube-scheduler"}[5m])) without(instance, pod))
+      labels:
+        quantile: "0.99"
+      record: cluster_quantile:scheduler_e2e_scheduling_duration_seconds:histogram_quantile
+    - expr: |
+        histogram_quantile(0.99, sum(rate(scheduler_scheduling_algorithm_duration_seconds_bucket{job="kube-scheduler"}[5m])) without(instance, pod))
+      labels:
+        quantile: "0.99"
+      record: cluster_quantile:scheduler_scheduling_algorithm_duration_seconds:histogram_quantile
+    - expr: |
+        histogram_quantile(0.99, sum(rate(scheduler_binding_duration_seconds_bucket{job="kube-scheduler"}[5m])) without(instance, pod))
+      labels:
+        quantile: "0.99"
+      record: cluster_quantile:scheduler_binding_duration_seconds:histogram_quantile
+    - expr: |
+        histogram_quantile(0.9, sum(rate(scheduler_e2e_scheduling_duration_seconds_bucket{job="kube-scheduler"}[5m])) without(instance, pod))
+      labels:
+        quantile: "0.9"
+      record: cluster_quantile:scheduler_e2e_scheduling_duration_seconds:histogram_quantile
+    - expr: |
+        histogram_quantile(0.9, sum(rate(scheduler_scheduling_algorithm_duration_seconds_bucket{job="kube-scheduler"}[5m])) without(instance, pod))
+      labels:
+        quantile: "0.9"
+      record: cluster_quantile:scheduler_scheduling_algorithm_duration_seconds:histogram_quantile
+    - expr: |
+        histogram_quantile(0.9, sum(rate(scheduler_binding_duration_seconds_bucket{job="kube-scheduler"}[5m])) without(instance, pod))
+      labels:
+        quantile: "0.9"
+      record: cluster_quantile:scheduler_binding_duration_seconds:histogram_quantile
+    - expr: |
+        histogram_quantile(0.5, sum(rate(scheduler_e2e_scheduling_duration_seconds_bucket{job="kube-scheduler"}[5m])) without(instance, pod))
+      labels:
+        quantile: "0.5"
+      record: cluster_quantile:scheduler_e2e_scheduling_duration_seconds:histogram_quantile
+    - expr: |
+        histogram_quantile(0.5, sum(rate(scheduler_scheduling_algorithm_duration_seconds_bucket{job="kube-scheduler"}[5m])) without(instance, pod))
+      labels:
+        quantile: "0.5"
+      record: cluster_quantile:scheduler_scheduling_algorithm_duration_seconds:histogram_quantile
+    - expr: |
+        histogram_quantile(0.5, sum(rate(scheduler_binding_duration_seconds_bucket{job="kube-scheduler"}[5m])) without(instance, pod))
+      labels:
+        quantile: "0.5"
+      record: cluster_quantile:scheduler_binding_duration_seconds:histogram_quantile
+  - name: node.rules
+    rules:
+    - expr: sum(min(kube_pod_info) by (node))
+      record: ':kube_pod_info_node_count:'
+    - expr: |
+        max(label_replace(kube_pod_info{job="kube-state-metrics"}, "pod", "$1", "pod", "(.*)")) by (node, namespace, pod)
+      record: 'node_namespace_pod:kube_pod_info:'
+    - expr: |
+        count by (node) (sum by (node, cpu) (
+          node_cpu_seconds_total{job="node-exporter"}
+        * on (namespace, pod) group_left(node)
+          node_namespace_pod:kube_pod_info:
+        ))
+      record: node:node_num_cpu:sum
+    - expr: |
+        sum(
+          node_memory_MemAvailable_bytes{job="node-exporter"} or
+          (
+            node_memory_Buffers_bytes{job="node-exporter"} +
+            node_memory_Cached_bytes{job="node-exporter"} +
+            node_memory_MemFree_bytes{job="node-exporter"} +
+            node_memory_Slab_bytes{job="node-exporter"}
+          )
+        )
+      record: :node_memory_MemAvailable_bytes:sum
+  - name: kube-prometheus-node-recording.rules
+    rules:
+    - expr: sum(rate(node_cpu_seconds_total{mode!="idle",mode!="iowait"}[3m])) BY
+        (instance)
+      record: instance:node_cpu:rate:sum
+    - expr: sum((node_filesystem_size_bytes{mountpoint="/"} - node_filesystem_free_bytes{mountpoint="/"}))
+        BY (instance)
+      record: instance:node_filesystem_usage:sum
+    - expr: sum(rate(node_network_receive_bytes_total[3m])) BY (instance)
+      record: instance:node_network_receive_bytes:rate:sum
+    - expr: sum(rate(node_network_transmit_bytes_total[3m])) BY (instance)
+      record: instance:node_network_transmit_bytes:rate:sum
+    - expr: sum(rate(node_cpu_seconds_total{mode!="idle",mode!="iowait"}[5m])) WITHOUT
+        (cpu, mode) / ON(instance) GROUP_LEFT() count(sum(node_cpu_seconds_total)
+        BY (instance, cpu)) BY (instance)
+      record: instance:node_cpu:ratio
+    - expr: sum(rate(node_cpu_seconds_total{mode!="idle",mode!="iowait"}[5m]))
+      record: cluster:node_cpu:sum_rate5m
+    - expr: cluster:node_cpu_seconds_total:rate5m / count(sum(node_cpu_seconds_total)
+        BY (instance, cpu))
+      record: cluster:node_cpu:ratio
+  - name: node-exporter
+    rules:
+    - alert: NodeFilesystemSpaceFillingUp
+      annotations:
+        platform: "育苗通测试平台"
+        description: Filesystem on {{ $labels.device }} at {{ $labels.instance }}
+          has only {{ printf "%.2f" $value }}% available space left and is filling
+          up.
+        summary: "预计文件系统将在接下来的24小时内用完空间。"
+      expr: |
+        (
+          node_filesystem_avail_bytes{job="node-exporter",fstype!=""} / node_filesystem_size_bytes{job="node-exporter",fstype!=""} * 100 < 40
+        and
+          predict_linear(node_filesystem_avail_bytes{job="node-exporter",fstype!=""}[6h], 24*60*60) < 0
+        and
+          node_filesystem_readonly{job="node-exporter",fstype!=""} == 0
+        )
+      for: 1h
+      labels:
+        severity: warning
+    - alert: NodeFilesystemSpaceFillingUp
+      annotations:
+        platform: "育苗通测试平台"
+        description: Filesystem on {{ $labels.device }} at {{ $labels.instance }}
+          has only {{ printf "%.2f" $value }}% available space left and is filling
+          up fast.
+        summary: "预计文件系统将在接下来的4个小时内用完空间。"
+      expr: |
+        (
+          node_filesystem_avail_bytes{job="node-exporter",fstype!=""} / node_filesystem_size_bytes{job="node-exporter",fstype!=""} * 100 < 20
+        and
+          predict_linear(node_filesystem_avail_bytes{job="node-exporter",fstype!=""}[6h], 4*60*60) < 0
+        and
+          node_filesystem_readonly{job="node-exporter",fstype!=""} == 0
+        )
+      for: 1h
+      labels:
+        severity: critical
+    - alert: NodeFilesystemAlmostOutOfSpace
+      annotations:
+        platform: "育苗通测试平台"
+        description: Filesystem on {{ $labels.device }} at {{ $labels.instance }}
+          has only {{ printf "%.2f" $value }}% available space left.
+        summary: "文件系统剩余空间不到5％。"
+      expr: |
+        (
+          node_filesystem_avail_bytes{job="node-exporter",fstype!=""} / node_filesystem_size_bytes{job="node-exporter",fstype!=""} * 100 < 5
+        and
+          node_filesystem_readonly{job="node-exporter",fstype!=""} == 0
+        )
+      for: 1h
+      labels:
+        severity: warning
+    - alert: NodeFilesystemAlmostOutOfSpace
+      annotations:
+        platform: "育苗通测试平台"
+        description: Filesystem on {{ $labels.device }} at {{ $labels.instance }}
+          has only {{ printf "%.2f" $value }}% available space left.
+        summary: "文件系统剩余空间不到3％。"
+      expr: |
+        (
+          node_filesystem_avail_bytes{job="node-exporter",fstype!=""} / node_filesystem_size_bytes{job="node-exporter",fstype!=""} * 100 < 3
+        and
+          node_filesystem_readonly{job="node-exporter",fstype!=""} == 0
+        )
+      for: 1h
+      labels:
+        severity: critical
+    - alert: NodeFilesystemFilesFillingUp
+      annotations:
+        platform: "育苗通测试平台"
+        description: Filesystem on {{ $labels.device }} at {{ $labels.instance }}
+          has only {{ printf "%.2f" $value }}% available inodes left and is filling
+          up.
+        summary: "预计文件系统将在接下来的24小时内用尽inodes。"
+      expr: |
+        (
+          node_filesystem_files_free{job="node-exporter",fstype!=""} / node_filesystem_files{job="node-exporter",fstype!=""} * 100 < 40
+        and
+          predict_linear(node_filesystem_files_free{job="node-exporter",fstype!=""}[6h], 24*60*60) < 0
+        and
+          node_filesystem_readonly{job="node-exporter",fstype!=""} == 0
+        )
+      for: 1h
+      labels:
+        severity: warning
+    - alert: NodeFilesystemFilesFillingUp
+      annotations:
+        platform: "育苗通测试平台"
+        description: Filesystem on {{ $labels.device }} at {{ $labels.instance }}
+          has only {{ printf "%.2f" $value }}% available inodes left and is filling
+          up fast.
+        summary: "预计文件系统将在接下来的4小时内用尽inodes。"
+      expr: |
+        (
+          node_filesystem_files_free{job="node-exporter",fstype!=""} / node_filesystem_files{job="node-exporter",fstype!=""} * 100 < 20
+        and
+          predict_linear(node_filesystem_files_free{job="node-exporter",fstype!=""}[6h], 4*60*60) < 0
+        and
+          node_filesystem_readonly{job="node-exporter",fstype!=""} == 0
+        )
+      for: 1h
+      labels:
+        severity: critical
+    - alert: NodeFilesystemAlmostOutOfFiles
+      annotations:
+        platform: "育苗通测试平台"
+        description: Filesystem on {{ $labels.device }} at {{ $labels.instance }}
+          has only {{ printf "%.2f" $value }}% available inodes left.
+        summary: "文件系统仅剩不到5％的inodes。"
+      expr: |
+        (
+          node_filesystem_files_free{job="node-exporter",fstype!=""} / node_filesystem_files{job="node-exporter",fstype!=""} * 100 < 5
+        and
+          node_filesystem_readonly{job="node-exporter",fstype!=""} == 0
+        )
+      for: 1h
+      labels:
+        severity: warning
+    - alert: NodeFilesystemAlmostOutOfFiles
+      annotations:
+        platform: "育苗通测试平台"
+        description: Filesystem on {{ $labels.device }} at {{ $labels.instance }}
+          has only {{ printf "%.2f" $value }}% available inodes left.
+        summary: "文件系统仅剩不到3％的inodes。"
+      expr: |
+        (
+          node_filesystem_files_free{job="node-exporter",fstype!=""} / node_filesystem_files{job="node-exporter",fstype!=""} * 100 < 3
+        and
+          node_filesystem_readonly{job="node-exporter",fstype!=""} == 0
+        )
+      for: 1h
+      labels:
+        severity: critical
+    - alert: NodeNetworkReceiveErrs
+      annotations:
+        platform: "育苗通测试平台"
+        description: '{{ $labels.instance }} interface {{ $labels.device }} has encountered
+          {{ printf "%.0f" $value }} receive errors in the last two minutes.'
+        summary: "网络接口报告许多接收错误。"
+      expr: |
+        increase(node_network_receive_errs_total[2m]) > 10
+      for: 1h
+      labels:
+        severity: warning
+    - alert: NodeNetworkTransmitErrs
+      annotations:
+        platform: "育苗通测试平台"
+        description: '{{ $labels.instance }} interface {{ $labels.device }} has encountered
+          {{ printf "%.0f" $value }} transmit errors in the last two minutes.'
+        summary: "网络接口报告许多传输错误。"
+      expr: |
+        increase(node_network_transmit_errs_total[2m]) > 10
+      for: 1h
+      labels:
+        severity: warning
+  - name: kubernetes-apps
+    rules:
+    - alert: KubePodCrashLooping
+      annotations:
+        platform: "育苗通测试平台"
+        message: Pod {{ $labels.namespace }}/{{ $labels.pod }} ({{ $labels.container
+          }}) is restarting {{ printf "%.2f" $value }} times / 5 minutes.
+      expr: |
+        rate(kube_pod_container_status_restarts_total{job="kube-state-metrics"}[15m]) * 60 * 5 > 0
+      for: 15m
+      labels:
+        severity: critical
+    - alert: KubePodNotReady
+      annotations:
+        platform: "育苗通测试平台"
+        message: "Pod {{$labels.namespace}}/{{$labels.pod}}处于未就绪状态的时间超过15分钟。"
+      expr: |
+        sum by (namespace, pod) (kube_pod_status_phase{job="kube-state-metrics", phase=~"Failed|Pending|Unknown"} * on(namespace, pod) group_left(owner_kind) kube_pod_owner{owner_kind!="Job"}) > 0
+      for: 15m
+      labels:
+        severity: critical
+    - alert: KubeDeploymentGenerationMismatch
+      annotations:
+        platform: "育苗通测试平台"
+        message: "Deployment {{$labels.namespace}}/{{$labels.deployment}}生成不匹配，这表明Deployment已失败但尚未回滚。"
+      expr: |
+        kube_deployment_status_observed_generation{job="kube-state-metrics"}
+          !=
+        kube_deployment_metadata_generation{job="kube-state-metrics"}
+      for: 15m
+      labels:
+        severity: critical
+    - alert: KubeDeploymentReplicasMismatch
+      annotations:
+        platform: "育苗通测试平台"
+        message: "Deployment{{$labels.namespace}}/{{$labels.deployment}}超过15分钟未匹配预期的副本数。"
+      expr: |
+        kube_deployment_spec_replicas{job="kube-state-metrics"}
+          !=
+        kube_deployment_status_replicas_available{job="kube-state-metrics"}
+      for: 15m
+      labels:
+        severity: critical
+    - alert: KubeStatefulSetReplicasMismatch
+      annotations:
+        platform: "育苗通测试平台"
+        message: "StatefulSet {{$labels.namespace}}/{{$labels.statefulset}}超过15分钟未匹配预期的副本数。"
+      expr: |
+        kube_statefulset_status_replicas_ready{job="kube-state-metrics"}
+          !=
+        kube_statefulset_status_replicas{job="kube-state-metrics"}
+      for: 15m
+      labels:
+        severity: critical
+    - alert: KubeStatefulSetGenerationMismatch
+      annotations:
+        platform: "育苗通测试平台"
+        message: "StatefulSet {{$labels.namespace}}/{{$labels.statefulset}}生成不匹配，这表明StatefulSet已失败但尚未回滚。"
+      expr: |
+        kube_statefulset_status_observed_generation{job="kube-state-metrics"}
+          !=
+        kube_statefulset_metadata_generation{job="kube-state-metrics"}
+      for: 15m
+      labels:
+        severity: critical
+    - alert: KubeStatefulSetUpdateNotRolledOut
+      annotations:
+        platform: "育苗通测试平台"
+        message: StatefulSet {{ $labels.namespace }}/{{ $labels.statefulset }} update
+          has not been rolled out.
+      expr: |
+        max without (revision) (
+          kube_statefulset_status_current_revision{job="kube-state-metrics"}
+            unless
+          kube_statefulset_status_update_revision{job="kube-state-metrics"}
+        )
+          *
+        (
+          kube_statefulset_replicas{job="kube-state-metrics"}
+            !=
+          kube_statefulset_status_replicas_updated{job="kube-state-metrics"}
+        )
+      for: 15m
+      labels:
+        severity: critical
+    - alert: KubeDaemonSetRolloutStuck
+      annotations:
+        platform: "育苗通测试平台"
+        message: Only {{ $value | humanizePercentage }} of the desired Pods of DaemonSet
+          {{ $labels.namespace }}/{{ $labels.daemonset }} are scheduled and ready.
+      expr: |
+        kube_daemonset_status_number_ready{job="kube-state-metrics"}
+          /
+        kube_daemonset_status_desired_number_scheduled{job="kube-state-metrics"} < 1.00
+      for: 15m
+      labels:
+        severity: critical
+    - alert: KubeContainerWaiting
+      annotations:
+        platform: "育苗通测试平台"
+        message: Pod {{ $labels.namespace }}/{{ $labels.pod }} container {{ $labels.container}}
+          has been in waiting state for longer than 1 hour.
+      expr: |
+        sum by (namespace, pod, container) (kube_pod_container_status_waiting_reason{job="kube-state-metrics"}) > 0
+      for: 1h
+      labels:
+        severity: warning
+    - alert: KubeDaemonSetNotScheduled
+      annotations:
+        platform: "育苗通测试平台"
+        message: '{{ $value }} Pods of DaemonSet {{ $labels.namespace }}/{{ $labels.daemonset
+          }} are not scheduled.'
+      expr: |
+        kube_daemonset_status_desired_number_scheduled{job="kube-state-metrics"}
+          -
+        kube_daemonset_status_current_number_scheduled{job="kube-state-metrics"} > 0
+      for: 10m
+      labels:
+        severity: warning
+    - alert: KubeDaemonSetMisScheduled
+      annotations:
+        platform: "育苗通测试平台"
+        message: '{{ $value }} Pods of DaemonSet {{ $labels.namespace }}/{{ $labels.daemonset
+          }} are running where they are not supposed to run.'
+      expr: |
+        kube_daemonset_status_number_misscheduled{job="kube-state-metrics"} > 0
+      for: 10m
+      labels:
+        severity: warning
+    - alert: KubeCronJobRunning
+      annotations:
+        platform: "育苗通测试平台"
+        message: CronJob {{ $labels.namespace }}/{{ $labels.cronjob }} is taking more
+          than 1h to complete.
+      expr: |
+        time() - kube_cronjob_next_schedule_time{job="kube-state-metrics"} > 3600
+      for: 1h
+      labels:
+        severity: warning
+    - alert: KubeJobCompletion
+      annotations:
+        platform: "育苗通测试平台"
+        message: Job {{ $labels.namespace }}/{{ $labels.job_name }} is taking more
+          than one hour to complete.
+      expr: |
+        kube_job_spec_completions{job="kube-state-metrics"} - kube_job_status_succeeded{job="kube-state-metrics"}  > 0
+      for: 1h
+      labels:
+        severity: warning
+    - alert: KubeJobFailed
+      annotations:
+        platform: "育苗通测试平台"
+        message: Job {{ $labels.namespace }}/{{ $labels.job_name }} failed to complete.
+      expr: |
+        kube_job_failed{job="kube-state-metrics"}  > 0
+      for: 15m
+      labels:
+        severity: warning
+    - alert: KubeHpaReplicasMismatch
+      annotations:
+        platform: "育苗通测试平台"
+        message: HPA {{ $labels.namespace }}/{{ $labels.hpa }} has not matched the
+          desired number of replicas for longer than 15 minutes.
+      expr: |
+        (kube_hpa_status_desired_replicas{job="kube-state-metrics"}
+          !=
+        kube_hpa_status_current_replicas{job="kube-state-metrics"})
+          and
+        changes(kube_hpa_status_current_replicas[15m]) == 0
+      for: 15m
+      labels:
+        severity: warning
+    - alert: KubeHpaMaxedOut
+      annotations:
+        platform: "育苗通测试平台"
+        message: HPA {{ $labels.namespace }}/{{ $labels.hpa }} has been running at
+          max replicas for longer than 15 minutes.
+      expr: |
+        kube_hpa_status_current_replicas{job="kube-state-metrics"}
+          ==
+        kube_hpa_spec_max_replicas{job="kube-state-metrics"}
+      for: 15m
+      labels:
+        severity: warning
+  - name: kubernetes-resources
+    rules:
+    - alert: KubeCPUOvercommit
+      annotations:
+        platform: "育苗通测试平台"
+        message: "群集已超额使用Pod的CPU资源请求，因此无法容忍节点故障。"
+      expr: |
+        sum(namespace:kube_pod_container_resource_requests_cpu_cores:sum)
+          /
+        sum(kube_node_status_allocatable_cpu_cores)
+          >
+        (count(kube_node_status_allocatable_cpu_cores)-1) / count(kube_node_status_allocatable_cpu_cores)
+      for: 5m
+      labels:
+        severity: warning
+    - alert: KubeMemOvercommit
+      annotations:
+        platform: "育苗通测试平台"
+        message: "群集已过量使用Pod的内存资源请求，因此无法容忍节点故障。"
+      expr: |
+        sum(namespace:kube_pod_container_resource_requests_memory_bytes:sum)
+          /
+        sum(kube_node_status_allocatable_memory_bytes)
+          >
+        (count(kube_node_status_allocatable_memory_bytes)-1)
+          /
+        count(kube_node_status_allocatable_memory_bytes)
+      for: 5m
+      labels:
+        severity: warning
+    - alert: KubeCPUOvercommit
+      annotations:
+        platform: "育苗通测试平台"
+        message: "群集已超额使用了对命名空间的CPU资源请求。"
+      expr: |
+        sum(kube_resourcequota{job="kube-state-metrics", type="hard", resource="cpu"})
+          /
+        sum(kube_node_status_allocatable_cpu_cores)
+          > 1.5
+      for: 5m
+      labels:
+        severity: warning
+    - alert: KubeMemOvercommit
+      annotations:
+        platform: "育苗通测试平台"
+        message: "群集已过量使用了对命名空间的内存资源请求。"
+      expr: |
+        sum(kube_resourcequota{job="kube-state-metrics", type="hard", resource="memory"})
+          /
+        sum(kube_node_status_allocatable_memory_bytes{job="node-exporter"})
+          > 1.5
+      for: 5m
+      labels:
+        severity: warning
+    - alert: KubeQuotaExceeded
+      annotations:
+        platform: "育苗通测试平台"
+        message: Namespace {{ $labels.namespace }} is using {{ $value | humanizePercentage
+          }} of its {{ $labels.resource }} quota.
+      expr: |
+        kube_resourcequota{job="kube-state-metrics", type="used"}
+          / ignoring(instance, job, type)
+        (kube_resourcequota{job="kube-state-metrics", type="hard"} > 0)
+          > 0.90
+      for: 15m
+      labels:
+        severity: warning
+    # - alert: CPUThrottlingHigh
+      # annotations:
+        # message: '{{ $value | humanizePercentage }} throttling of CPU in namespace
+          # {{ $labels.namespace }} for container {{ $labels.container }} in pod {{
+          # $labels.pod }}.'
+      # expr: |
+        # sum(increase(container_cpu_cfs_throttled_periods_total{container!="", }[5m])) by (container, pod, namespace)
+          # /
+        # sum(increase(container_cpu_cfs_periods_total{}[5m])) by (container, pod, namespace)
+          # > ( 25 / 100 )
+      # for: 15m
+      # labels:
+        # severity: warning
+  - name: kubernetes-storage
+    rules:
+    - alert: KubePersistentVolumeUsageCritical
+      annotations:
+        platform: "育苗通测试平台"
+        message: The PersistentVolume claimed by {{ $labels.persistentvolumeclaim
+          }} in Namespace {{ $labels.namespace }} is only {{ $value | humanizePercentage
+          }} free.
+      expr: |
+        kubelet_volume_stats_available_bytes{job="kubelet"}
+          /
+        kubelet_volume_stats_capacity_bytes{job="kubelet"}
+          < 0.03
+      for: 1m
+      labels:
+        severity: critical
+    - alert: KubePersistentVolumeFullInFourDays
+      annotations:
+        platform: "育苗通测试平台"
+        message: "根据最近的抽样，{{$labels.persistentvolumeclaim}}在命名空间{{$labels.namespace}}中声明的PersistentVolume预计将在四天内填满，目前{{$value | humanizePercentage}}可用。"
+      expr: |
+        (
+          kubelet_volume_stats_available_bytes{job="kubelet"}
+            /
+          kubelet_volume_stats_capacity_bytes{job="kubelet"}
+        ) < 0.15
+        and
+        predict_linear(kubelet_volume_stats_available_bytes{job="kubelet"}[6h], 4 * 24 * 3600) < 0
+      for: 1h
+      labels:
+        severity: critical
+    - alert: KubePersistentVolumeErrors
+      annotations:
+        platform: "育苗通测试平台"
+        message: The persistent volume {{ $labels.persistentvolume }} has status {{
+          $labels.phase }}.
+      expr: |
+        kube_persistentvolume_status_phase{phase=~"Failed|Pending",job="kube-state-metrics"} > 0
+      for: 5m
+      labels:
+        severity: critical
+  - name: kubernetes-system
+    rules:
+    - alert: KubeVersionMismatch
+      annotations:
+        platform: "育苗通测试平台"
+        message: There are {{ $value }} different semantic versions of Kubernetes
+          components running.
+      expr: |
+        count(count by (gitVersion) (label_replace(kubernetes_build_info{job!~"kube-dns|coredns"},"gitVersion","$1","gitVersion","(v[0-9]*.[0-9]*.[0-9]*).*"))) > 1
+      for: 15m
+      labels:
+        severity: warning
+    - alert: KubeClientErrors
+      annotations:
+        platform: "育苗通测试平台"
+        message: Kubernetes API server client '{{ $labels.job }}/{{ $labels.instance
+          }}' is experiencing {{ $value | humanizePercentage }} errors.'
+      expr: |
+        (sum(rate(rest_client_requests_total{code=~"5.."}[5m])) by (instance, job)
+          /
+        sum(rate(rest_client_requests_total[5m])) by (instance, job))
+        > 0.01
+      for: 15m
+      labels:
+        severity: warning
+  - name: kubernetes-system-apiserver
+    rules:
+    - alert: KubeAPILatencyHigh
+      annotations:
+        platform: "育苗通测试平台"
+        message: The API server has a 99th percentile latency of {{ $value }} seconds
+          for {{ $labels.verb }} {{ $labels.resource }}.
+      expr: |
+        cluster_quantile:apiserver_request_duration_seconds:histogram_quantile{job="apiserver",quantile="0.99",subresource!="log",verb!~"LIST|WATCH|WATCHLIST|PROXY|CONNECT"} > 1
+      for: 10m
+      labels:
+        severity: warning
+    - alert: KubeAPILatencyHigh
+      annotations:
+        platform: "育苗通测试平台"
+        message: The API server has a 99th percentile latency of {{ $value }} seconds
+          for {{ $labels.verb }} {{ $labels.resource }}.
+      expr: |
+        cluster_quantile:apiserver_request_duration_seconds:histogram_quantile{job="apiserver",quantile="0.99",subresource!="log",verb!~"LIST|WATCH|WATCHLIST|PROXY|CONNECT"} > 4
+      for: 10m
+      labels:
+        severity: critical
+    - alert: KubeAPIErrorsHigh
+      annotations:
+        platform: "育苗通测试平台"
+        message: API server is returning errors for {{ $value | humanizePercentage
+          }} of requests.
+      expr: |
+        sum(rate(apiserver_request_total{job="apiserver",code=~"5.."}[5m]))
+          /
+        sum(rate(apiserver_request_total{job="apiserver"}[5m])) > 0.03
+      for: 10m
+      labels:
+        severity: critical
+    - alert: KubeAPIErrorsHigh
+      annotations:
+        platform: "育苗通测试平台"
+        message: API server is returning errors for {{ $value | humanizePercentage
+          }} of requests.
+      expr: |
+        sum(rate(apiserver_request_total{job="apiserver",code=~"5.."}[5m]))
+          /
+        sum(rate(apiserver_request_total{job="apiserver"}[5m])) > 0.01
+      for: 10m
+      labels:
+        severity: warning
+    - alert: KubeAPIErrorsHigh
+      annotations:
+        platform: "育苗通测试平台"
+        message: API server is returning errors for {{ $value | humanizePercentage
+          }} of requests for {{ $labels.verb }} {{ $labels.resource }} {{ $labels.subresource
+          }}.
+      expr: |
+        sum(rate(apiserver_request_total{job="apiserver",code=~"5.."}[5m])) by (resource,subresource,verb)
+          /
+        sum(rate(apiserver_request_total{job="apiserver"}[5m])) by (resource,subresource,verb) > 0.10
+      for: 10m
+      labels:
+        severity: critical
+    - alert: KubeAPIErrorsHigh
+      annotations:
+        platform: "育苗通测试平台"
+        message: API server is returning errors for {{ $value | humanizePercentage
+          }} of requests for {{ $labels.verb }} {{ $labels.resource }} {{ $labels.subresource
+          }}.
+      expr: |
+        sum(rate(apiserver_request_total{job="apiserver",code=~"5.."}[5m])) by (resource,subresource,verb)
+          /
+        sum(rate(apiserver_request_total{job="apiserver"}[5m])) by (resource,subresource,verb) > 0.05
+      for: 10m
+      labels:
+        severity: warning
+    - alert: KubeClientCertificateExpiration
+      annotations:
+        platform: "育苗通测试平台"
+        message: "用于验证apiserver的客户端证书的有效期限少于7.0天。"
+      expr: |
+        apiserver_client_certificate_expiration_seconds_count{job="apiserver"} > 0 and histogram_quantile(0.01, sum by (job, le) (rate(apiserver_client_certificate_expiration_seconds_bucket{job="apiserver"}[5m]))) < 604800
+      labels:
+        severity: warning
+    - alert: KubeClientCertificateExpiration
+      annotations:
+        platform: "育苗通测试平台"
+        message: "用于验证apiserver的客户端证书的有效期限少于24.0小时。"
+      expr: |
+        apiserver_client_certificate_expiration_seconds_count{job="apiserver"} > 0 and histogram_quantile(0.01, sum by (job, le) (rate(apiserver_client_certificate_expiration_seconds_bucket{job="apiserver"}[5m]))) < 86400
+      labels:
+        severity: critical
+    - alert: KubeAPIDown
+      annotations:
+        platform: "育苗通测试平台"
+        message: "KubeAPI已从Prometheus目标发现中消失。"
+      expr: |
+        absent(up{job="apiserver"} == 1)
+      for: 15m
+      labels:
+        severity: critical
+  - name: kubernetes-system-kubelet
+    rules:
+    - alert: KubeNodeNotReady
+      annotations:
+        platform: "育苗通测试平台"
+        message: "{{$labels.node}}尚未准备就绪超过15分钟。"
+      expr: |
+        kube_node_status_condition{job="kube-state-metrics",condition="Ready",status="true"} == 0
+      for: 15m
+      labels:
+        severity: warning
+    - alert: KubeNodeUnreachable
+      annotations:
+        platform: "育苗通测试平台"
+        message: "{{$labels.node}}无法访问，某些工作负荷可能会重新安排。"
+      expr: |
+        kube_node_spec_taint{job="kube-state-metrics",key="node.kubernetes.io/unreachable",effect="NoSchedule"} == 1
+      labels:
+        severity: warning
+    - alert: KubeletTooManyPods
+      annotations:
+        platform: "育苗通测试平台"
+        message: Kubelet '{{ $labels.node }}' is running at {{ $value | humanizePercentage
+          }} of its Pod capacity.
+      expr: |
+        max(max(kubelet_running_pod_count{job="kubelet"}) by(instance) * on(instance) group_left(node) kubelet_node_name{job="kubelet"}) by(node) / max(kube_node_status_capacity_pods{job="kube-state-metrics"}) by(node) > 0.95
+      for: 15m
+      labels:
+        severity: warning
+    - alert: KubeletDown
+      annotations:
+        platform: "育苗通测试平台"
+        message: "Kubelet已从Prometheus目标发现中消失。"
+      expr: |
+        absent(up{job="kubelet"} == 1)
+      for: 15m
+      labels:
+        severity: critical
+  # - name: kubernetes-system-scheduler
+    # rules:
+    # - alert: KubeSchedulerDown
+      # annotations:
+        # message: KubeScheduler has disappeared from Prometheus target discovery.
+        # runbook_url: https://github.com/kubernetes-monitoring/kubernetes-mixin/tree/master/runbook.md#alert-name-kubeschedulerdown
+      # expr: |
+        # absent(up{job="kube-scheduler"} == 1)
+      # for: 15m
+      # labels:
+        # severity: critical
+  # - name: kubernetes-system-controller-manager
+    # rules:
+    # - alert: KubeControllerManagerDown
+      # annotations:
+        # message: KubeControllerManager has disappeared from Prometheus target discovery.
+        # runbook_url: https://github.com/kubernetes-monitoring/kubernetes-mixin/tree/master/runbook.md#alert-name-kubecontrollermanagerdown
+      # expr: |
+        # absent(up{job="kube-controller-manager"} == 1)
+      # for: 15m
+      # labels:
+        # severity: critical
+  - name: prometheus
+    rules:
+    - alert: PrometheusBadConfig
+      annotations:
+        platform: "育苗通测试平台"
+        description: Prometheus {{$labels.namespace}}/{{$labels.pod}} has failed to
+          reload its configuration.
+        summary: "Prometheus配置重新加载失败。"
+      expr: |
+        # Without max_over_time, failed scrapes could create false negatives, see
+        # https://www.robustperception.io/alerting-on-gauges-in-prometheus-2-0 for details.
+        max_over_time(prometheus_config_last_reload_successful{job="prometheus-k8s",namespace="monitoring"}[5m]) == 0
+      for: 10m
+      labels:
+        severity: critical
+    - alert: PrometheusNotificationQueueRunningFull
+      annotations:
+        platform: "育苗通测试平台"
+        description: Alert notification queue of Prometheus {{$labels.namespace}}/{{$labels.pod}}
+          is running full.
+        summary: "Prometheus警报通知队列预计将在30m以内用完。"
+      expr: |
+        # Without min_over_time, failed scrapes could create false negatives, see
+        # https://www.robustperception.io/alerting-on-gauges-in-prometheus-2-0 for details.
+        (
+          predict_linear(prometheus_notifications_queue_length{job="prometheus-k8s",namespace="monitoring"}[5m], 60 * 30)
+        >
+          min_over_time(prometheus_notifications_queue_capacity{job="prometheus-k8s",namespace="monitoring"}[5m])
+        )
+      for: 15m
+      labels:
+        severity: warning
+    - alert: PrometheusErrorSendingAlertsToSomeAlertmanagers
+      annotations:
+        platform: "育苗通测试平台"
+        description: '{{ printf "%.1f" $value }}% errors while sending alerts from
+          Prometheus {{$labels.namespace}}/{{$labels.pod}} to Alertmanager {{$labels.alertmanager}}.'
+        summary: "Prometheus在将警报发送到特定的Alertmanager时遇到了超过1％的错误。"
+      expr: |
+        (
+          rate(prometheus_notifications_errors_total{job="prometheus-k8s",namespace="monitoring"}[5m])
+        /
+          rate(prometheus_notifications_sent_total{job="prometheus-k8s",namespace="monitoring"}[5m])
+        )
+        * 100
+        > 1
+      for: 15m
+      labels:
+        severity: warning
+    - alert: PrometheusErrorSendingAlertsToAnyAlertmanager
+      annotations:
+        platform: "育苗通测试平台"
+        description: '{{ printf "%.1f" $value }}% minimum errors while sending alerts
+          from Prometheus {{$labels.namespace}}/{{$labels.pod}} to any Alertmanager.'
+        summary: "Prometheus在将警报发送到任何Alertmanager时遇到3％以上的错误。"
+      expr: |
+        min without(alertmanager) (
+          rate(prometheus_notifications_errors_total{job="prometheus-k8s",namespace="monitoring"}[5m])
+        /
+          rate(prometheus_notifications_sent_total{job="prometheus-k8s",namespace="monitoring"}[5m])
+        )
+        * 100
+        > 3
+      for: 15m
+      labels:
+        severity: critical
+    - alert: PrometheusNotConnectedToAlertmanagers
+      annotations:
+        platform: "育苗通测试平台"
+        description: Prometheus {{$labels.namespace}}/{{$labels.pod}} is not connected
+          to any Alertmanagers.
+        summary: "Prometheus未与任何Alertmanager连接。"
+      expr: |
+        # Without max_over_time, failed scrapes could create false negatives, see
+        # https://www.robustperception.io/alerting-on-gauges-in-prometheus-2-0 for details.
+        max_over_time(prometheus_notifications_alertmanagers_discovered{job="prometheus-k8s",namespace="monitoring"}[5m]) < 1
+      for: 10m
+      labels:
+        severity: warning
+    - alert: PrometheusTSDBReloadsFailing
+      annotations:
+        platform: "育苗通测试平台"
+        description: Prometheus {{$labels.namespace}}/{{$labels.pod}} has detected
+          {{$value | humanize}} reload failures over the last 3h.
+        summary: "Prometheus从磁盘重新加载块时遇到问题。"
+      expr: |
+        increase(prometheus_tsdb_reloads_failures_total{job="prometheus-k8s",namespace="monitoring"}[3h]) > 0
+      for: 4h
+      labels:
+        severity: warning
+    - alert: PrometheusTSDBCompactionsFailing
+      annotations:
+        platform: "育苗通测试平台"
+        description: Prometheus {{$labels.namespace}}/{{$labels.pod}} has detected
+          {{$value | humanize}} compaction failures over the last 3h.
+        summary: "Prometheus在压缩块时遇到问题。"
+      expr: |
+        increase(prometheus_tsdb_compactions_failed_total{job="prometheus-k8s",namespace="monitoring"}[3h]) > 0
+      for: 4h
+      labels:
+        severity: warning
+    - alert: PrometheusNotIngestingSamples
+      annotations:
+        platform: "育苗通测试平台"
+        description: Prometheus {{$labels.namespace}}/{{$labels.pod}} is not ingesting
+          samples.
+        summary: "Prometheus没有获取到样本"
+      expr: |
+        rate(prometheus_tsdb_head_samples_appended_total{job="prometheus-k8s",namespace="monitoring"}[5m]) <= 0
+      for: 10m
+      labels:
+        severity: warning
+    - alert: PrometheusDuplicateTimestamps
+      annotations:
+        platform: "育苗通测试平台"
+        description: Prometheus {{$labels.namespace}}/{{$labels.pod}} is dropping
+          {{ printf "%.4g" $value  }} samples/s with different values but duplicated
+          timestamp.
+        summary: "Prometheus正在删除带有重复时间戳的样本。"
+      expr: |
+        rate(prometheus_target_scrapes_sample_duplicate_timestamp_total{job="prometheus-k8s",namespace="monitoring"}[5m]) > 0
+      for: 10m
+      labels:
+        severity: warning
+    - alert: PrometheusOutOfOrderTimestamps
+      annotations:
+        platform: "育苗通测试平台"
+        description: Prometheus {{$labels.namespace}}/{{$labels.pod}} is dropping
+          {{ printf "%.4g" $value  }} samples/s with timestamps arriving out of order.
+        summary: "Prometheus丢弃带有乱序时间戳的样本。"
+      expr: |
+        rate(prometheus_target_scrapes_sample_out_of_order_total{job="prometheus-k8s",namespace="monitoring"}[5m]) > 0
+      for: 10m
+      labels:
+        severity: warning
+    - alert: PrometheusRemoteStorageFailures
+      annotations:
+        platform: "育苗通测试平台"
+        description: Prometheus {{$labels.namespace}}/{{$labels.pod}} failed to send
+          {{ printf "%.1f" $value }}% of the samples to queue {{$labels.queue}}.
+        summary: "Prometheus无法将样本发送到远程存储。"
+      expr: |
+        (
+          rate(prometheus_remote_storage_failed_samples_total{job="prometheus-k8s",namespace="monitoring"}[5m])
+        /
+          (
+            rate(prometheus_remote_storage_failed_samples_total{job="prometheus-k8s",namespace="monitoring"}[5m])
+          +
+            rate(prometheus_remote_storage_succeeded_samples_total{job="prometheus-k8s",namespace="monitoring"}[5m])
+          )
+        )
+        * 100
+        > 1
+      for: 15m
+      labels:
+        severity: critical
+    - alert: PrometheusRemoteWriteBehind
+      annotations:
+        platform: "育苗通测试平台"
+        description: Prometheus {{$labels.namespace}}/{{$labels.pod}} remote write
+          is {{ printf "%.1f" $value }}s behind for queue {{$labels.queue}}.
+        summary: "Prometheus远程写入落后了。"
+      expr: |
+        # Without max_over_time, failed scrapes could create false negatives, see
+        # https://www.robustperception.io/alerting-on-gauges-in-prometheus-2-0 for details.
+        (
+          max_over_time(prometheus_remote_storage_highest_timestamp_in_seconds{job="prometheus-k8s",namespace="monitoring"}[5m])
+        - on(job, instance) group_right
+          max_over_time(prometheus_remote_storage_queue_highest_sent_timestamp_seconds{job="prometheus-k8s",namespace="monitoring"}[5m])
+        )
+        > 120
+      for: 15m
+      labels:
+        severity: critical
+    - alert: PrometheusRemoteWriteDesiredShards
+      annotations:
+        platform: "育苗通测试平台"
+        description: Prometheus {{$labels.namespace}}/{{$labels.pod}} remote write
+          desired shards calculation wants to run {{ $value }} shards, which is more
+          than the max of {{ printf `prometheus_remote_storage_shards_max{instance="%s",job="prometheus-k8s",namespace="monitoring"}`
+          $labels.instance | query | first | value }}.
+        summary: "Prometheus远程写入所需的分片计算要比配置的最大分片运行更多。"
+      expr: |
+        # Without max_over_time, failed scrapes could create false negatives, see
+        # https://www.robustperception.io/alerting-on-gauges-in-prometheus-2-0 for details.
+        (
+          max_over_time(prometheus_remote_storage_shards_desired{job="prometheus-k8s",namespace="monitoring"}[5m])
+        >
+          max_over_time(prometheus_remote_storage_shards_max{job="prometheus-k8s",namespace="monitoring"}[5m])
+        )
+      for: 15m
+      labels:
+        severity: warning
+    - alert: PrometheusRuleFailures
+      annotations:
+        platform: "育苗通测试平台"
+        description: Prometheus {{$labels.namespace}}/{{$labels.pod}} has failed to
+          evaluate {{ printf "%.0f" $value }} rules in the last 5m.
+        summary: "Prometheus无法通过规则评估。"
+      expr: |
+        increase(prometheus_rule_evaluation_failures_total{job="prometheus-k8s",namespace="monitoring"}[5m]) > 0
+      for: 15m
+      labels:
+        severity: critical
+    - alert: PrometheusMissingRuleEvaluations
+      annotations:
+        platform: "育苗通测试平台"
+        description: Prometheus {{$labels.namespace}}/{{$labels.pod}} has missed {{
+          printf "%.0f" $value }} rule group evaluations in the last 5m.
+        summary: "Prometheus由于规则组评估速度慢而缺少规则评估。"
+      expr: |
+        increase(prometheus_rule_group_iterations_missed_total{job="prometheus-k8s",namespace="monitoring"}[5m]) > 0
+      for: 15m
+      labels:
+        severity: warning
+  - name: alertmanager.rules
+    rules:
+    - alert: AlertmanagerConfigInconsistent
+      annotations:
+        platform: "育苗通测试平台"
+        message: "Alertmanager {{$labels.service}}实例的配置不同步。"
+      expr: |
+        count_values("config_hash", alertmanager_config_hash{job="alertmanager-main",namespace="monitoring"}) BY (service) / ON(service) GROUP_LEFT() label_replace(max(prometheus_operator_spec_replicas{job="prometheus-operator",namespace="monitoring",controller="alertmanager"}) by (name, job, namespace, controller), "service", "alertmanager-$1", "name", "(.*)") != 1
+      for: 5m
+      labels:
+        severity: critical
+    - alert: AlertmanagerFailedReload
+      annotations:
+        platform: "育苗通测试平台"
+        message: "Alertmanager {{$labels.namespace}}/{{$labels.pod}}重新加载配置失败。"
+      expr: |
+        alertmanager_config_last_reload_successful{job="alertmanager-main",namespace="monitoring"} == 0
+      for: 10m
+      labels:
+        severity: warning
+    - alert: AlertmanagerMembersInconsistent
+      annotations:
+        platform: "育苗通测试平台"
+        message: "Alertmanager尚未找到集群的所有其他成员。"
+      expr: |
+        alertmanager_cluster_members{job="alertmanager-main",namespace="monitoring"}
+          != on (service) GROUP_LEFT()
+        count by (service) (alertmanager_cluster_members{job="alertmanager-main",namespace="monitoring"})
+      for: 5m
+      labels:
+        severity: critical
+  - name: general.rules
+    rules:
+    - alert: TargetDown
+      annotations:
+        platform: "育苗通测试平台"
+        message: '{{ printf "%.4g" $value }}% of the {{ $labels.job }} targets in
+          {{ $labels.namespace }} namespace are down.'
+      expr: 100 * (count(up == 0) BY (job, namespace, service) / count(up) BY (job,
+        namespace, service)) > 10
+      for: 10m
+      labels:
+        severity: warning
+    - alert: Watchdog
+      annotations:
+        platform: "育苗通测试平台"
+        message: "此警报始终处于触发状态，旨在确保整个警报管道均正常运行。"
+        runbook_url: https://github.com/kubernetes-monitoring/kubernetes-mixin/tree/master/runbook.md
+      expr: vector(1)
+      labels:
+        severity: none
+  - name: node-time
+    rules:
+    - alert: ClockSkewDetected
+      annotations:
+        platform: "育苗通测试平台"
+        message: Clock skew detected on node-exporter {{ $labels.namespace }}/{{ $labels.pod
+          }}. Ensure NTP is configured correctly on this host.
+      expr: |
+        abs(node_timex_offset_seconds{job="node-exporter"}) > 0.05
+      for: 2m
+      labels:
+        severity: warning
+  - name: node-network
+    rules:
+    - alert: NodeNetworkInterfaceFlapping
+      annotations:
+        platform: "育苗通测试平台"
+        message: Network interface "{{ $labels.device }}" changing it's up status
+          often on node-exporter {{ $labels.namespace }}/{{ $labels.pod }}"
+      expr: |
+        changes(node_network_up{job="node-exporter",device!~"veth.+"}[2m]) > 2
+      for: 2m
+      labels:
+        severity: warning
+  - name: prometheus-operator
+    rules:
+    - alert: PrometheusOperatorReconcileErrors
+      annotations:
+        platform: "育苗通测试平台"
+        message: Errors while reconciling {{ $labels.controller }} in {{ $labels.namespace
+          }} Namespace.
+      expr: |
+        rate(prometheus_operator_reconcile_errors_total{job="prometheus-operator",namespace="monitoring"}[5m]) > 0.1
+      for: 10m
+      labels:
+        severity: warning
+    - alert: PrometheusOperatorNodeLookupErrors
+      annotations:
+        platform: "育苗通测试平台"
+        message: Errors while reconciling Prometheus in {{ $labels.namespace }} Namespace.
+      expr: |
+        rate(prometheus_operator_node_address_lookup_errors_total{job="prometheus-operator",namespace="monitoring"}[5m]) > 0.1
+      for: 10m
+      labels:
+        severity: warning
