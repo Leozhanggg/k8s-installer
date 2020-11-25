@@ -1,5 +1,9 @@
 #!/bin/sh
 
+# deploy kubernetes service
+kubectl apply -f prometheus-kubeControllerManagerService.yaml
+kubectl apply -f prometheus-kubeSchedulerService.yaml
+
 # upgrade alertmanager configuration
 kubectl create secret generic alertmanager-main --from-file=alertmanager.yaml -n monitoring --dry-run -oyaml > alertmanager-secret.yaml
 kubectl apply -f alertmanager-secret.yaml
@@ -14,3 +18,6 @@ kubectl apply -f prometheus-rules.yaml
 
 # upgrade prometheus configuration
 kubectl apply -f prometheus-prometheus.yaml
+
+# upgrade grafana configuration
+kubectl apply -f grafana-deployment.yaml

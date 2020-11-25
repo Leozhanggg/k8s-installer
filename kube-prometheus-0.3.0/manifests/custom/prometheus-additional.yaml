@@ -1,111 +1,72 @@
-- job_name: 'node_export_others'
+- job_name: 'node-exporter-others'
   static_configs:
     - targets:
-      - 10.88.88.118:9591
-      - 10.88.88.137:9591
-      - 10.88.88.138:9591
-      - 10.88.88.139:9591
-      - 10.88.88.153:9591
-      - 10.88.88.154:9591
-      - 10.88.88.156:9591
-      - 10.88.88.159:9591
-      - 10.88.88.166:9591
-      - 10.88.88.167:9591
-      - 10.88.88.168:9591
-      - 10.88.88.169:9591
-      - 10.88.88.175:9591
-      - 10.88.88.177:9591
-      - 10.88.88.179:9591
-      - 10.88.88.180:9591
-      - 10.88.88.181:9591
+      - *.*.*.149:31190
+      - *.*.*.150:31190
+      - *.*.*.122:31190
+      - *.*.*.142:31190
+      - *.*.*.143:31190
+      - *.*.*.137:31190
+      - *.*.*.148:31190
+      - *.*.*.129:31190
 
-- job_name: 'nginx'
+- job_name: 'mysql-exporter'
   static_configs:
     - targets:
-      - 10.88.88.159:9593
+      - *.*.*.104:9592
+      - *.*.*.125:9592
+      - *.*.*.128:9592
 
-- job_name: 'mysql'
-  static_configs:
-    - targets:
-      - 10.88.88.156:9592
-
-- job_name: 'pushgateway-flink'
-  static_configs:
-    - targets:
-      - 10.88.88.137:9091
-
-- job_name: 'kafka_jmx_export'
-  static_configs:
-    - targets:
-      - 10.88.88.118:9991
-      - 10.88.88.138:9991
-      - 10.88.88.139:9991
-
-- job_name: 'zookeeper_cdh_export'
-  static_configs:
-    - targets:
-      - 10.88.88.118:9595
-      - 10.88.88.138:9595
-      - 10.88.88.139:9595
-
-- job_name: 'hdfs_namenode_cdh'
-  static_configs:
-    - targets:
-      - 10.88.88.137:9600
-      - 10.88.88.139:9600
-
-- job_name: 'hdfs_datanode_cdh'
-  static_configs:
-    - targets:
-      - 10.88.88.118:9601
-      - 10.88.88.138:9601
-      - 10.88.88.139:9601
-
-- job_name: 'yarn_resourcemanager_cdh'
-  static_configs:
-    - targets:
-      - 10.88.88.137:9602
-      - 10.88.88.139:9602
-
-- job_name: 'yarn_nodemanager_cdh'
-  static_configs:
-    - targets:
-      - 10.88.88.118:9603
-      - 10.88.88.138:9603
-      - 10.88.88.139:9603
-
-- job_name: 'redis_exporter'
-  static_configs:
-    - targets:
-      - 10.88.88.166:9594
-
-- job_name: 'elasticsearch'
-  metrics_path: "/_prometheus/metrics"
-  static_configs:
-  - targets:
-    - 10.88.88.169:8970
-    - 10.88.88.175:8970
-    - 10.88.88.177:8970
-    
-- job_name: 'nacos'
+- job_name: 'nacos-exporter'
   metrics_path: '/nacos/actuator/prometheus'
   static_configs:
     - targets:
-      - 10.88.88.166:8848
-      - 10.88.88.167:8848
-      - 10.88.88.168:8848
-      
-- job_name: 'redis_exporter_targets'
+      - *.*.*.113:8848
+      - *.*.*.114:8848
+      - *.*.*.118:8848
+
+- job_name: 'elasticsearch-exporter'
+  static_configs:
+  - targets:
+    - *.*.*.110:9597
+    - *.*.*.107:9597
+    - *.*.*.117:9597
+    - *.*.*.106:9597
+    - *.*.*.105:9597
+    - *.*.*.64:9597
+
+- job_name: 'zookeeper-exporter'
+  static_configs:
+  - targets:
+    - *.*.*.115:9595
+    - *.*.*.121:9595
+    - *.*.*.120:9595
+
+- job_name: 'nginx-exporter'
+  static_configs:
+  - targets:
+    - *.*.*.149:9593
+    - *.*.*.150:9593
+    - *.*.*.122:9593
+
+- job_name: 'redis-exporter'
+  static_configs:
+  - targets:
+    - *.*.*.109:9594
+
+- job_name: 'redis-exporter-targets'
   static_configs:
     - targets:
-      - redis://10.88.88.179:6179
-      - redis://10.88.88.180:6179
-      - redis://10.88.88.181:6179
-      - redis://10.88.88.179:6178
-      - redis://10.88.88.180:6178
-      - redis://10.88.88.181:6178
-      - redis://10.88.88.179:6177
-      - redis://10.88.88.179:6176
+      - redis://*.*.*.146:7090
+      - redis://*.*.*.144:7090
+      - redis://*.*.*.133:7091
+      - redis://*.*.*.136:7091
+      - redis://*.*.*.144:7092
+      - redis://*.*.*.133:7092
+      - redis://*.*.*.136:7093
+      - redis://*.*.*.109:7093
+      - redis://*.*.*.139:7094
+      - redis://*.*.*.146:7094
   metrics_path: /scrape
   relabel_configs:
     - source_labels: [__address__]
@@ -113,4 +74,5 @@
     - source_labels: [__param_target]
       target_label: instance
     - target_label: __address__
-      replacement: 10.88.88.166:9594
+      replacement: *.*.*.109:9594
+

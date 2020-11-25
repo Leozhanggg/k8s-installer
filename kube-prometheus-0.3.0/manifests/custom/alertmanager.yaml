@@ -6,9 +6,9 @@ global:
   # smtp_auth_password: '******'
 route:
   group_by: ['job']
-  group_wait: 20s
-  group_interval: 30m
-  repeat_interval: 12h
+  group_wait: 10s
+  group_interval: 5m
+  repeat_interval: 8h
   receiver: webhook
 receivers:
   - name: webhook

@@ -17,6 +17,13 @@ spec:
     name: additional-scrape-configs
     key: prometheus-additional.yaml
   retention: 15d
+  storage:
+    volumeClaimTemplate:
+      spec:
+        storageClassName: managed-nfs-storage
+        resources:
+          requests:
+            storage: 100Gi
   nodeSelector:
     kubernetes.io/os: linux
   podMonitorSelector: {}

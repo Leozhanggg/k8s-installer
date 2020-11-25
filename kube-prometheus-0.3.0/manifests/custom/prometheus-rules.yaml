@@ -442,7 +442,7 @@ spec:
     - alert: KubeDeploymentReplicasMismatch
       annotations:
         platform: "育苗通测试平台"
-        message: "Deployment{{$labels.namespace}}/{{$labels.deployment}}超过15分钟未匹配预期的副本数。"
+        message: "Deployment {{$labels.namespace}}/{{$labels.deployment}}超过15分钟未匹配预期的副本数。"
       expr: |
         kube_deployment_spec_replicas{job="kube-state-metrics"}
           !=
@@ -596,7 +596,7 @@ spec:
     - alert: KubeCPUOvercommit
       annotations:
         platform: "育苗通测试平台"
-        message: "群集已超额使用Pod的CPU资源请求，因此无法容忍节点故障。"
+        message: "集群已超额使用Pod的CPU资源请求，因此无法容忍节点故障。"
       expr: |
         sum(namespace:kube_pod_container_resource_requests_cpu_cores:sum)
           /
@@ -609,7 +609,7 @@ spec:
     - alert: KubeMemOvercommit
       annotations:
         platform: "育苗通测试平台"
-        message: "群集已过量使用Pod的内存资源请求，因此无法容忍节点故障。"
+        message: "集群已过量使用Pod的内存资源请求，因此无法容忍节点故障。"
       expr: |
         sum(namespace:kube_pod_container_resource_requests_memory_bytes:sum)
           /
@@ -624,7 +624,7 @@ spec:
     - alert: KubeCPUOvercommit
       annotations:
         platform: "育苗通测试平台"
-        message: "群集已超额使用了对命名空间的CPU资源请求。"
+        message: "集群已超额使用了对命名空间的CPU资源请求。"
       expr: |
         sum(kube_resourcequota{job="kube-state-metrics", type="hard", resource="cpu"})
           /
@@ -636,7 +636,7 @@ spec:
     - alert: KubeMemOvercommit
       annotations:
         platform: "育苗通测试平台"
-        message: "群集已过量使用了对命名空间的内存资源请求。"
+        message: "集群已过量使用了对命名空间的内存资源请求。"
       expr: |
         sum(kube_resourcequota{job="kube-state-metrics", type="hard", resource="memory"})
           /
@@ -658,19 +658,19 @@ spec:
       for: 15m
       labels:
         severity: warning
-    # - alert: CPUThrottlingHigh
-      # annotations:
-        # message: '{{ $value | humanizePercentage }} throttling of CPU in namespace
-          # {{ $labels.namespace }} for container {{ $labels.container }} in pod {{
-          # $labels.pod }}.'
-      # expr: |
-        # sum(increase(container_cpu_cfs_throttled_periods_total{container!="", }[5m])) by (container, pod, namespace)
-          # /
-        # sum(increase(container_cpu_cfs_periods_total{}[5m])) by (container, pod, namespace)
-          # > ( 25 / 100 )
-      # for: 15m
-      # labels:
-        # severity: warning
+    - alert: CPUThrottlingHigh
+      annotations:
+        message: '{{ $value | humanizePercentage }} throttling of CPU in namespace
+          {{ $labels.namespace }} for container {{ $labels.container }} in pod {{
+          $labels.pod }}.'
+      expr: |
+        sum(increase(container_cpu_cfs_throttled_periods_total{container!="", }[5m])) by (container, pod, namespace)
+          /
+        sum(increase(container_cpu_cfs_periods_total{}[5m])) by (container, pod, namespace)
+          > ( 25 / 100 )
+      for: 15m
+      labels:
+        severity: warning
   - name: kubernetes-storage
     rules:
     - alert: KubePersistentVolumeUsageCritical
@@ -812,7 +812,7 @@ spec:
     - alert: KubeClientCertificateExpiration
       annotations:
         platform: "育苗通测试平台"
-        message: "用于验证apiserver的客户端证书的有效期限少于7.0天。"
+        message: "用于验证apiserver的客户端证书的有效期限少于7天。"
       expr: |
         apiserver_client_certificate_expiration_seconds_count{job="apiserver"} > 0 and histogram_quantile(0.01, sum by (job, le) (rate(apiserver_client_certificate_expiration_seconds_bucket{job="apiserver"}[5m]))) < 604800
       labels:
@@ -820,7 +820,7 @@ spec:
     - alert: KubeClientCertificateExpiration
       annotations:
         platform: "育苗通测试平台"
-        message: "用于验证apiserver的客户端证书的有效期限少于24.0小时。"
+        message: "用于验证apiserver的客户端证书的有效期限少于24小时。"
       expr: |
         apiserver_client_certificate_expiration_seconds_count{job="apiserver"} > 0 and histogram_quantile(0.01, sum by (job, le) (rate(apiserver_client_certificate_expiration_seconds_bucket{job="apiserver"}[5m]))) < 86400
       labels:
@@ -872,28 +872,26 @@ spec:
       for: 15m
       labels:
         severity: critical
-  # - name: kubernetes-system-scheduler
-    # rules:
-    # - alert: KubeSchedulerDown
-      # annotations:
-        # message: KubeScheduler has disappeared from Prometheus target discovery.
-        # runbook_url: https://github.com/kubernetes-monitoring/kubernetes-mixin/tree/master/runbook.md#alert-name-kubeschedulerdown
-      # expr: |
-        # absent(up{job="kube-scheduler"} == 1)
-      # for: 15m
-      # labels:
-        # severity: critical
-  # - name: kubernetes-system-controller-manager
-    # rules:
-    # - alert: KubeControllerManagerDown
-      # annotations:
-        # message: KubeControllerManager has disappeared from Prometheus target discovery.
-        # runbook_url: https://github.com/kubernetes-monitoring/kubernetes-mixin/tree/master/runbook.md#alert-name-kubecontrollermanagerdown
-      # expr: |
-        # absent(up{job="kube-controller-manager"} == 1)
-      # for: 15m
-      # labels:
-        # severity: critical
+  - name: kubernetes-system-scheduler
+    rules:
+    - alert: KubeSchedulerDown
+      annotations:
+        message: "KubeScheduler已从Prometheus目标发现中消失。"
+      expr: |
+        absent(up{job="kube-scheduler"} == 1)
+      for: 15m
+      labels:
+        severity: critical
+  - name: kubernetes-system-controller-manager
+    rules:
+    - alert: KubeControllerManagerDown
+      annotations:
+        message: "KubeControllerManager已从Prometheus目标发现中消失。"
+      expr: |
+        absent(up{job="kube-controller-manager"} == 1)
+      for: 15m
+      labels:
+        severity: critical
   - name: prometheus
     rules:
     - alert: PrometheusBadConfig
@@ -1140,26 +1138,26 @@ spec:
       for: 5m
       labels:
         severity: critical
-  - name: general.rules
-    rules:
-    - alert: TargetDown
-      annotations:
-        platform: "育苗通测试平台"
-        message: '{{ printf "%.4g" $value }}% of the {{ $labels.job }} targets in
-          {{ $labels.namespace }} namespace are down.'
-      expr: 100 * (count(up == 0) BY (job, namespace, service) / count(up) BY (job,
-        namespace, service)) > 10
-      for: 10m
-      labels:
-        severity: warning
-    - alert: Watchdog
-      annotations:
-        platform: "育苗通测试平台"
-        message: "此警报始终处于触发状态，旨在确保整个警报管道均正常运行。"
-        runbook_url: https://github.com/kubernetes-monitoring/kubernetes-mixin/tree/master/runbook.md
-      expr: vector(1)
-      labels:
-        severity: none
+  # - name: general.rules
+    # rules:
+    # - alert: TargetDown
+      # annotations:
+        # platform: "育苗通测试平台"
+        # message: '{{ printf "%.4g" $value }}% of the {{ $labels.job }} targets in
+          # {{ $labels.namespace }} namespace are down.'
+        # runbook_url: https://github.com/kubernetes-monitoring/kubernetes-mixin/tree/master/runbook.md
+      # expr: 100 * (count(up == 0) BY (job, namespace, service) / count(up) BY (job,
+        # namespace, service)) > 10
+      # for: 10m
+      # labels:
+        # severity: warning
+    # - alert: Watchdog
+      # annotations:
+        # platform: "育苗通测试平台"
+        # message: "此警报始终处于触发状态，旨在确保整个警报管道均正常运行。"
+      # expr: vector(1)
+      # labels:
+        # severity: none
   - name: node-time
     rules:
     - alert: ClockSkewDetected
