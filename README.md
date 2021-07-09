@@ -5,7 +5,7 @@ One-click deployment of a kubernetes.
 
 **【主节点部署】**
 
-默认直接执行 bash deploy.sh 即可！
+默认直接执行 sh deploy.sh 即可！
 
 参数说明：
 
@@ -21,10 +21,14 @@ One-click deployment of a kubernetes.
 
 **【工作节点部署】**
 
-1）首先在工作节点执行 bash docker/deploy_docker.sh /data/docker（部署docker）
+默认直接执行 sh deploy_worker.sh --ip <worker_ip> --dir <docker_dir> （要求：主节点可以无密登录工作节点）
 
-2）再者在工作节点执行 bash kubernetes/config_k8s.sh（配置k8s）
+>或者手动安装：
 
-3）然后在主节点执行 tail -n2 kubernetes/kubeadm-init.log（查看加入集群token）
+>1）首先在工作节点执行 bash docker/deploy_docker.sh /data/docker（部署docker）
 
-4）最后在工作节点上执行加入k8s集群命令即可！
+>2）再者在工作节点执行 bash kubernetes/config_k8s.sh（配置k8s）
+
+>3）然后在主节点执行 tail -n2 kubernetes/kubeadm-init.log（查看加入集群token）
+
+>4）最后在工作节点上执行加入k8s集群命令即可！
