@@ -42,7 +42,21 @@ if [ $? -ne 0 ]; then exit 1; fi
 echo
 
 echo "============================== Join k8s cluster =============================="
-KUBE_INIT_TOKEN=$(tail -n2 kubernetes/kubeadm-init.log)
+MASTER_AGE=$(kubectl get nodes | grep master | awk '{print $4}')
+if [[ '$MASTER_AGE' =~ 'y' ]]; then
+  KUBE_INIT_TOKEN=$(kubeadm token create --print-join-command)
+elif [[ '$MASTER_AGE' =~ 'd' ]]; then
+  KUBE_INIT_TOKEN=$(kubeadm token create --print-join-command)
+elif [[ '$MASTER_AGE' =~ 'h' ]]; then
+  if [[ ${MASTER_AGE%h} -ge 24 ]]; then
+    KUBE_INIT_TOKEN=$(kubeadm token create --print-join-command)
+  else
+    KUBE_INIT_TOKEN=$(tail -n2 kubernetes/kubeadm-init.log)
+  fi
+else
+  KUBE_INIT_TOKEN=$(tail -n2 kubernetes/kubeadm-init.log)
+fi
+
 ssh root@${WORKER_IP} "$KUBE_INIT_TOKEN"
 if [ $? -ne 0 ]; then exit 1; fi
 echo
