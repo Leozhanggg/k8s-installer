@@ -35,18 +35,22 @@ echo "============================== Begin of deploy k8s worker ================
 ssh root@${WORKER_IP} "chmod a+x docker/*.sh kubernetes/*.sh"
 ssh root@${WORKER_IP} "./docker/deploy_docker.sh $DATA_DIR/docker"
 if [ $? -ne 0 ]; then exit 1; fi
+echo
 
 ssh root@${WORKER_IP} "./kubernetes/config_k8s.sh ${WORKER_IP}"
 if [ $? -ne 0 ]; then exit 1; fi
+echo
 
 echo "============================== Join k8s cluster =============================="
 KUBE_INIT_TOKEN=$(tail -n2 kubernetes/kubeadm-init.log)
 ssh root@${WORKER_IP} "$KUBE_INIT_TOKEN"
 if [ $? -ne 0 ]; then exit 1; fi
+echo
 
 echo "============================== Check cluster status =============================="
 while kubectl get nodes | grep NotReady; do sleep 5 && echo "waiting node ready..."; done
 while kubectl get pod -A| grep -vE "STATUS|Running|Completed"; do sleep 30 && echo "waiting pod ready..."; done
 echo "k8s worker deployed successfully!"
+
 echo "============================== End of deploy k8s worker =============================="
 popd &>/dev/null
