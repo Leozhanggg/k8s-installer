@@ -23,7 +23,7 @@ One-click deployment of a kubernetes.
 
 默认直接执行 sh deploy_worker.sh --ip <worker_ip> --dir <docker_dir> （要求：主节点可以无密登录工作节点）
 
->或者手动安装：
+>或者分步执行：
 
 >1）首先在工作节点执行 bash docker/deploy_docker.sh /data/docker（部署docker）
 
