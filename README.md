@@ -7,7 +7,7 @@ One-click deployment of a kubernetes.
 
 默认直接执行 bash deploy.sh 即可！
 
-默认参数值说明：
+参数说明：
 
 1）IS_MONITOR=no，默认不部署prometheus监控，可通过参数--monitor yes指定部署
 
